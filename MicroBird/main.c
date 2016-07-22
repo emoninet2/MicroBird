@@ -13,8 +13,175 @@
 #include "nrf24l01p/nrf24l01p.h"
 
 
+
+
+#define switchPINPORT_0	PIND
+#define switchPINPORT_1	PINB
+#define switchPINPORT_2	PINB
+#define switchPINPORT_3	PINB
+
+#define switchPIN_0		6
+#define switchPIN_1		7
+#define switchPIN_2		6
+#define switchPIN_3		5
+
+
+#define relayPORT_0	PORTD
+#define relayPORT_1 PORTD
+#define relayPORT_2 PORTD
+#define relayPORT_3 PORTC
+
+#define relayPIN_0 0 
+#define relayPIN_1 1
+#define relayPIN_2 4
+#define relayPIN_3 6
+
+
+volatile bool relayState_0 = 0;
+volatile bool relayState_1 = 0;
+volatile bool relayState_2 = 0;
+volatile bool relayState_3 = 0;
+
+void test_relay(){
+			relay_control(3,0);
+			vTaskDelay(2000);
+			relay_control(3,1);
+			vTaskDelay(2000);
+			
+			relay_control(2,0);
+			vTaskDelay(2000);
+			relay_control(2,1);
+			vTaskDelay(2000);
+
+			relay_control(1,0);
+			vTaskDelay(2000);
+			relay_control(1,1);
+			vTaskDelay(2000);
+			
+			relay_control(0,0);
+			vTaskDelay(2000);
+			relay_control(0,1);
+			vTaskDelay(2000);
+}
+
+
+
+void relay_control(int relayID, bool state){
+	
+	
+	
+	switch(relayID){
+		case 0: {
+			relayPORT_0 &= ~(1<<relayPIN_0);
+			relayPORT_0 |= (state<<relayPIN_0);
+			relayState_0 = state;
+			break;
+		}
+		
+		case 1: {
+			relayPORT_1 &= ~(1<<relayPIN_1);
+			relayPORT_1 |= (state<<relayPIN_1);
+			relayState_1 = state;
+			break;
+		}
+		
+		case 2: {
+			relayPORT_2 &= ~(1<<relayPIN_2);
+			relayPORT_2 |= (state<<relayPIN_2);
+			relayState_2 = state;
+			break;
+		}
+		
+		case 3: {
+			relayPORT_3 &= ~(1<<relayPIN_3);
+			relayPORT_3 |= (state<<relayPIN_3);
+			relayState_3 = state;
+			break;
+		}
+		default:{
+			break;
+		}
+		
+	}
+}
+
+
+
+
+char *command_handler(char **args,int arg_count){
+
+	if(!strcmp(args[0], "light") ) {
+		if(!strcmp(args[1], "0")) {
+			if(!strcmp(args[2], "0")) {
+				relay_control(1,1);
+			}
+			else if(!strcmp(args[2], "1")) {
+				relay_control(1,0);
+			}
+		}
+		else if(!strcmp(args[1], "1")) {
+			if(!strcmp(args[2], "0")) {
+				relay_control(3,1);			
+			}
+			else if(!strcmp(args[2], "1")) {
+				relay_control(3,0);			
+			}
+		}
+	}
+	else if(!strcmp(args[0], "fan") ) {
+		if(!strcmp(args[1], "0")) {
+			relay_control(0,1);
+		}
+		else if(!strcmp(args[1], "1")) {
+			relay_control(0,0);
+		}
+	}
+	else{
+		//printf("unknown command\r\n");
+		//char message[50] = "unknown command\r\n";
+		//remotch_client->send_all("unknown command\r\n", sizeof("unknown command\r\n")-1);
+	}
+
+	return 0;
+}
+
+void command_parse_execute(char *command){
+
+	int arg_index = 0;
+	char *pch;
+	char *remotch_args[ 10];
+	pch = strtok(command, " ");
+	while(pch != NULL) {
+		remotch_args[arg_index] = pch;
+		arg_index++;
+		if(arg_index >=10) break;
+		pch = strtok (NULL, " ");
+	}
+	command_handler(remotch_args,arg_index);
+}
+
+
+
+
+
+
+
 int thread_1(void)
 {
+	DDRC|= (1<<7);
+	
+	DDRD|=(1<<0);
+	DDRD|=(1<<1);
+	DDRD|=(1<<4);
+	DDRC|=(1<<6);
+	
+	DDRD &= ~(1<<6);
+	DDRB &= ~(1<<7);
+	DDRB &= ~(1<<6);
+	DDRB &= ~(1<<5);
+	
+	DDRD&= ~(1<<6);
+	
 	
 	_nrf24l01p_init();
 	_nrf24l01p_enable_dynamic_payload();
@@ -50,34 +217,65 @@ int thread_1(void)
 	_nrf24l01p_set_RX_pipe_address(_NRF24L01P_PIPE_P3, 0x4C4C4C4C33);
 	_nrf24l01p_set_RX_pipe_address(_NRF24L01P_PIPE_P4, 0x4C4C4C4C34);
 	_nrf24l01p_set_RX_pipe_address(_NRF24L01P_PIPE_P5, 0x4C4C4C4C35);
-	//RIGHT
-// 	_nrf24l01p_set_RX_pipe_address(_NRF24L01P_PIPE_P1, 0x5252525231);
-// 	_nrf24l01p_set_RX_pipe_address(_NRF24L01P_PIPE_P2, 0x5252525232);
-// 	_nrf24l01p_set_RX_pipe_address(_NRF24L01P_PIPE_P3, 0x5252525233);
-// 	_nrf24l01p_set_RX_pipe_address(_NRF24L01P_PIPE_P4, 0x5252525234);
-// 	_nrf24l01p_set_RX_pipe_address(_NRF24L01P_PIPE_P5, 0x5252525235);	
+	
+	
+	
+	char rxData[35];
+	
+	
+	relay_control(0,1);
+	relay_control(1,1);
+	relay_control(2,1);
+	relay_control(3,1);
+	
+	bool cow = 0;
+	while(1){
 
-	int txerr = 0;
-	int passcount = 0;
-	int total_count =0;
-	char txbuff[32];
-    while(1)
-    {
- 		char txData[] = "\t\t\tL";
-		 
-		 /*sprintf(txbuff,"\t\t\tL\t\t\t\t%d\t%d\t%d\t%d,",total_count,passcount,txerr);*/
-		 sprintf(txbuff,"this is a sample text %d",total_count);
- 		int txerrflag = _nrf24l01p_write_to_address_ack(0x4541525448, (uint8_t*)txbuff,strlen(txbuff));
-		 if(txerrflag == -1) {
-			 txerr++;
-		 }
-		 else{
-			passcount++;
-		 }
-		total_count++;
-		 vTaskDelay(1000); //wait 2 seconds
-    }
+		
+		if((_nrf24l01p_readable(_NRF24L01P_PIPE_P1))){
+			int width = _nrf24l01p_read_dyn_pld(_NRF24L01P_PIPE_P1, (uint8_t*) rxData);
+			rxData[width] = '\0';
+			command_parse_execute(rxData);
+
+		}
+		
+		
+		
+		if((switchPINPORT_0&(1<<switchPIN_0))){
+			relayState_0 = !relayState_0;
+			relay_control(0,relayState_0);
+			//PORTC^=(1<<7);
+			while((switchPINPORT_0&(1<<switchPIN_0)));
+			vTaskDelay(50);
+		}
+		if((switchPINPORT_1&(1<<switchPIN_1))){
+			relayState_1 = !relayState_1;
+			relay_control(1,relayState_1);
+			//PORTC^=(1<<7);
+			while((switchPINPORT_1&(1<<switchPIN_1)));
+			vTaskDelay(50);
+		}
+
+		if((switchPINPORT_2&(1<<switchPIN_2))){
+			relayState_2 = !relayState_2;
+			relay_control(2,relayState_2);
+			//PORTC^=(1<<7);
+			while((switchPINPORT_2&(1<<switchPIN_2)));
+			vTaskDelay(50);
+		}
+		
+		if((switchPINPORT_3&(1<<switchPIN_3))){
+			relayState_3 = !relayState_3;
+			relay_control(3,relayState_3);
+			//PORTC^=(1<<7);
+			while((switchPINPORT_3&(1<<switchPIN_3)));
+			vTaskDelay(50);
+		}
+				
+		
+	}
 }
+
 
 
 
@@ -87,16 +285,16 @@ int thread_1(void)
 int main(void)
 {
 
-	xTaskCreate(thread_1,(const char *) "t3", 200, NULL, tskIDLE_PRIORITY, NULL );
+	xTaskCreate(thread_1,(const char *) "t1", 500, NULL, tskIDLE_PRIORITY, NULL );
 	
 	//starting the scheduler
 	vTaskStartScheduler();
 	
-	
-	while(1)
-	{
+	while(1){
 		
 	}
+	
+
 }
 
 
